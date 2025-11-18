@@ -1,9 +1,16 @@
 import axiosClient from "./axiosClient";
 import { Message } from "../types/api";
 
+export interface MessagesResponse {
+  messages: Message[];
+  nextCursor?: string | null;
+}
+
 export const messageApi = {
   getMessages(courseId: string) {
-    return axiosClient.get<Message[]>(`/api/courses/${courseId}/messages`);
+    return axiosClient.get<MessagesResponse>(
+      `/api/courses/${courseId}/messages`
+    );
   },
   sendMessage(courseId: string, content: string) {
     return axiosClient.post<Message>(`/api/courses/${courseId}/messages`, {

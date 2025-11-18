@@ -93,7 +93,7 @@ export function ChatPage() {
   }, [courses, selectedCourseId]);
 
   const currentMessages = selectedCourseId
-    ? messagesMap[selectedCourseId] ?? []
+    ? normalizeMessageState(messagesMap[selectedCourseId])
     : [];
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export function ChatPage() {
           setSelectedCourseId(normalizedCourses[0].id);
         }
       } catch (error) {
-        console.error("Failed to load courses", error);
+        console.error($lf(115), "Failed to load courses", error);
         setCourses(fallbackCourses);
         if (!selectedCourseId && fallbackCourses.length) {
           setSelectedCourseId(fallbackCourses[0].id);
@@ -134,7 +134,8 @@ export function ChatPage() {
 
   const appendMessage = useCallback((courseId: string, message: Message) => {
     setMessagesMap((prev) => {
-      const existing = prev[courseId] ?? [];
+      const existing = normalizeMessageState(prev[courseId]);
+      console.log($lf(138), "existing messages for course", courseId, existing);
       if (existing.find((item) => item.id === message.id)) {
         return prev;
       }
@@ -150,11 +151,14 @@ export function ChatPage() {
       setMessagesLoading(true);
       try {
         const { data } = await messageApi.getMessages(selectedCourseId);
+        const normalizedMessages = Array.isArray(data?.messages)
+          ? data.messages
+          : [];
         if (!ignore) {
-          setMessagesForCourse(selectedCourseId, data);
+          setMessagesForCourse(selectedCourseId, normalizedMessages);
         }
       } catch (error) {
-        console.error("Failed to load messages", error);
+        console.error($lf(158), "Failed to load messages", error);
         if (!ignore) {
           const fallback = fallbackMessages.filter(
             (message) => message.courseId === selectedCourseId
@@ -199,7 +203,7 @@ export function ChatPage() {
         );
         appendMessage(selectedCourseId, data);
       } catch (error) {
-        console.error("Failed to send message", error);
+        console.error($lf(203), "Failed to send message", error);
         const optimistic: Message = {
           id: `temp-${Date.now()}`,
           courseId: selectedCourseId,
@@ -233,7 +237,7 @@ export function ChatPage() {
         );
         appendMessage(selectedCourseId, data);
       } catch (error) {
-        console.error("Failed to upload file", error);
+        console.error($lf(237), "Failed to upload file", error);
         const previewUrl = URL.createObjectURL(file);
         filePreviewUrls.current.push(previewUrl);
         const optimistic: Message = {
@@ -314,4 +318,23 @@ export function ChatPage() {
       )}
     </MainLayout>
   );
+}
+
+function normalizeMessageState(value: unknown): Message[] {
+  if (Array.isArray(value)) {
+    return value as Message[];
+  }
+  if (
+    value &&
+    typeof value === "object" &&
+    Array.isArray((value as { messages?: Message[] }).messages)
+  ) {
+    return (value as { messages: Message[] }).messages;
+  }
+  return [];
+}
+
+function $lf(n: number) {
+  return "$lf|pages/ChatPage.tsx:" + n + " >";
+  // Automatically injected by Log Location Injector vscode extension
 }
