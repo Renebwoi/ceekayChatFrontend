@@ -47,6 +47,14 @@ export interface Message {
     name: string;
     role: UserRole;
   };
+  isPinned?: boolean;
+  pinnedAt?: string | null;
+  pinnedById?: string | null;
+  pinnedBy?: {
+    id: string;
+    name: string;
+    role: UserRole;
+  } | null;
 }
 
 export interface Course {

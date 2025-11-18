@@ -33,4 +33,14 @@ export const messageApi = {
       }
     );
   },
+  pinMessage(courseId: string, messageId: string) {
+    return axiosClient.post<Message>(
+      `/api/courses/${courseId}/messages/${messageId}/pin`
+    );
+  },
+  unpinMessage(courseId: string, messageId: string) {
+    return axiosClient.delete<Message>(
+      `/api/courses/${courseId}/messages/${messageId}/pin`
+    );
+  },
 };

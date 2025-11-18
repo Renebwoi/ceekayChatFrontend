@@ -83,6 +83,7 @@ export function ChatPage() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>({});
+  const [pinningMessageId, setPinningMessageId] = useState<string | null>(null);
   const filePreviewUrls = useRef<string[]>([]);
 
   const selectedCourse = useMemo(() => {
@@ -93,8 +94,13 @@ export function ChatPage() {
   }, [courses, selectedCourseId]);
 
   const currentMessages = selectedCourseId
-    ? normalizeMessageState(messagesMap[selectedCourseId])
+    ? normalizeMessageList(messagesMap[selectedCourseId])
     : [];
+
+  const pinnedMessageId = useMemo(() => {
+    const pinned = currentMessages.find((message) => message.isPinned);
+    return pinned ? pinned.id : null;
+  }, [currentMessages]);
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -127,21 +133,81 @@ export function ChatPage() {
 
   const setMessagesForCourse = useCallback(
     (courseId: string, items: Message[]) => {
-      setMessagesMap((prev) => ({ ...prev, [courseId]: items }));
+      const normalizedItems = normalizeMessageList(items);
+      setMessagesMap((prev) => ({ ...prev, [courseId]: normalizedItems }));
     },
     []
   );
 
   const appendMessage = useCallback((courseId: string, message: Message) => {
+    const normalizedMessage = normalizeMessage(message);
     setMessagesMap((prev) => {
-      const existing = normalizeMessageState(prev[courseId]);
+      const existing = normalizeMessageList(prev[courseId]);
       console.log($lf(138), "existing messages for course", courseId, existing);
-      if (existing.find((item) => item.id === message.id)) {
+      if (existing.find((item) => item.id === normalizedMessage.id)) {
         return prev;
       }
-      return { ...prev, [courseId]: [...existing, message] };
+      return {
+        ...prev,
+        [courseId]: [...existing, normalizedMessage],
+      };
     });
   }, []);
+
+  const applyPinnedState = useCallback(
+    (courseId: string, pinned: Message | null, fallbackMessageId?: string | null) => {
+      setMessagesMap((prev) => {
+        const existing = normalizeMessageList(prev[courseId]);
+        const targetId = pinned?.id ?? fallbackMessageId ?? null;
+
+        const updated = existing.map((message) => {
+          const normalizedMessage = normalizeMessage(message);
+          if (pinned && message.id === pinned.id) {
+            return normalizeMessage({ ...normalizedMessage, ...pinned, isPinned: true });
+          }
+
+          if (!pinned && targetId && message.id === targetId) {
+            return normalizeMessage({
+              ...normalizedMessage,
+              isPinned: false,
+              pinnedAt: null,
+              pinnedBy: null,
+              pinnedById: null,
+            });
+          }
+
+          if (pinned && message.isPinned && message.id !== pinned.id) {
+            return normalizeMessage({
+              ...normalizedMessage,
+              isPinned: false,
+              pinnedAt: null,
+              pinnedBy: null,
+              pinnedById: null,
+            });
+          }
+
+          if (!pinned && message.isPinned) {
+            return normalizeMessage({
+              ...normalizedMessage,
+              isPinned: false,
+              pinnedAt: null,
+              pinnedBy: null,
+              pinnedById: null,
+            });
+          }
+
+          return normalizedMessage;
+        });
+
+        if (pinned && !updated.some((message) => message.id === pinned.id)) {
+          updated.push(normalizeMessage({ ...pinned, isPinned: true }));
+        }
+
+        return { ...prev, [courseId]: updated };
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!selectedCourseId) return;
@@ -151,9 +217,7 @@ export function ChatPage() {
       setMessagesLoading(true);
       try {
         const { data } = await messageApi.getMessages(selectedCourseId);
-        const normalizedMessages = Array.isArray(data?.messages)
-          ? data.messages
-          : [];
+        const normalizedMessages = normalizeMessageList(data?.messages);
         if (!ignore) {
           setMessagesForCourse(selectedCourseId, normalizedMessages);
         }
@@ -186,7 +250,30 @@ export function ChatPage() {
     [appendMessage]
   );
 
-  useSocket({ token, onMessage: handleSocketMessage });
+  const handleSocketPinned = useCallback(
+    (payload: unknown) => {
+      const parsed = parsePinnedPayload(payload);
+      if (!parsed) return;
+      applyPinnedState(parsed.courseId, parsed.message ?? null, parsed.messageId ?? null);
+    },
+    [applyPinnedState]
+  );
+
+  const handleSocketUnpinned = useCallback(
+    (payload: unknown) => {
+      const parsed = parsePinnedPayload(payload);
+      if (!parsed) return;
+      applyPinnedState(parsed.courseId, null, parsed.messageId ?? parsed.message?.id ?? null);
+    },
+    [applyPinnedState]
+  );
+
+  useSocket({
+    token,
+    onMessage: handleSocketMessage,
+    onMessagePinned: handleSocketPinned,
+    onMessageUnpinned: handleSocketUnpinned,
+  });
 
   const handleSelectCourse = useCallback((courseId: string) => {
     setSelectedCourseId(courseId);
@@ -201,7 +288,7 @@ export function ChatPage() {
           selectedCourseId,
           content
         );
-        appendMessage(selectedCourseId, data);
+  appendMessage(selectedCourseId, data);
       } catch (error) {
         console.error($lf(203), "Failed to send message", error);
         const optimistic: Message = {
@@ -235,7 +322,7 @@ export function ChatPage() {
           file,
           caption
         );
-        appendMessage(selectedCourseId, data);
+  appendMessage(selectedCourseId, data);
       } catch (error) {
         console.error($lf(237), "Failed to upload file", error);
         const previewUrl = URL.createObjectURL(file);
@@ -265,6 +352,42 @@ export function ChatPage() {
       }
     },
     [appendMessage, selectedCourseId, user]
+  );
+
+  const handlePinMessage = useCallback(
+    async (messageId: string) => {
+      if (!selectedCourseId || !user) return;
+      setPinningMessageId(messageId);
+      try {
+        const { data } = await messageApi.pinMessage(selectedCourseId, messageId);
+        const pinnedMessage = isMessage(data)
+          ? normalizeMessage({ ...data, isPinned: true })
+          : null;
+        applyPinnedState(selectedCourseId, pinnedMessage, messageId);
+      } catch (error) {
+        console.error($lf(263), "Failed to pin message", error);
+      } finally {
+        setPinningMessageId(null);
+      }
+    },
+    [applyPinnedState, selectedCourseId, user]
+  );
+
+  const handleUnpinMessage = useCallback(
+    async (messageId: string) => {
+      if (!selectedCourseId || !user) return;
+      setPinningMessageId(messageId);
+      try {
+  const { data } = await messageApi.unpinMessage(selectedCourseId, messageId);
+  const responseMessage = isMessage(data) ? normalizeMessage(data) : null;
+        applyPinnedState(selectedCourseId, null, responseMessage?.id ?? messageId);
+      } catch (error) {
+        console.error($lf(279), "Failed to unpin message", error);
+      } finally {
+        setPinningMessageId(null);
+      }
+    },
+    [applyPinnedState, selectedCourseId, user]
   );
 
   useEffect(
@@ -300,6 +423,11 @@ export function ChatPage() {
             onSendMessage={handleSendMessage}
             onUploadFile={handleUploadFile}
             disabled={sending}
+            canPin={user.role === "LECTURER"}
+            pinnedMessageId={pinnedMessageId}
+            onPinMessage={handlePinMessage}
+            onUnpinMessage={handleUnpinMessage}
+            pinningMessageId={pinningMessageId}
           />
         )
       ) : coursesLoading ? (
@@ -332,6 +460,88 @@ function normalizeMessageState(value: unknown): Message[] {
     return (value as { messages: Message[] }).messages;
   }
   return [];
+}
+
+function normalizeMessageList(value: unknown): Message[] {
+  const list = normalizeMessageState(value);
+  return list.map((item) => normalizeMessage(item));
+}
+
+function normalizeMessage(value: Message): Message {
+  if (!value) {
+    return value;
+  }
+
+  const pinnedFlag =
+    (value as Message & { pinned?: boolean }).isPinned ??
+    (value as Message & { pinned?: boolean }).pinned ??
+    false;
+
+  const pinnedBy =
+    (value as Message & { pinnedBy?: Message["sender"] | null }).pinnedBy ??
+    null;
+
+  const pinnedById =
+    (value as Message & { pinnedById?: string | null }).pinnedById ??
+    pinnedBy?.id ??
+    null;
+
+  return {
+    ...value,
+    isPinned: pinnedFlag,
+    pinnedAt:
+      (value as Message & { pinnedAt?: string | null }).pinnedAt ?? null,
+    pinnedBy,
+    pinnedById,
+  };
+}
+
+function isMessage(value: unknown): value is Message {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    typeof (value as { id?: unknown }).id === "string" &&
+    typeof (value as { courseId?: unknown }).courseId === "string"
+  );
+}
+
+function parsePinnedPayload(payload: unknown): {
+  courseId: string;
+  message?: Message | null;
+  messageId?: string | null;
+} | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const candidate = payload as {
+    courseId?: unknown;
+    message?: unknown;
+    messageId?: unknown;
+  };
+
+  const message = isMessage(candidate.message)
+    ? normalizeMessage(candidate.message)
+    : null;
+  const courseId =
+    typeof candidate.courseId === "string"
+      ? candidate.courseId
+      : message?.courseId ?? null;
+
+  if (!courseId) {
+    return null;
+  }
+
+  const messageId =
+    typeof candidate.messageId === "string"
+      ? candidate.messageId
+      : message?.id ?? null;
+
+  return {
+    courseId,
+    message,
+    messageId,
+  };
 }
 
 function $lf(n: number) {
