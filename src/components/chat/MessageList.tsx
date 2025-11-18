@@ -20,7 +20,7 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto px-6 py-6">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-6 py-6">
       {messages.map((message) => (
         <div
           key={message.id}

@@ -18,8 +18,8 @@ export function ChatWindow({
   disabled,
 }: ChatWindowProps) {
   return (
-    <div className="flex h-full flex-col bg-slate-50">
-      <div className="flex-1">
+    <div className="flex h-full min-h-0 flex-col bg-slate-50">
+      <div className="flex-1 min-h-0">
         <MessageList messages={messages} currentUserId={currentUserId} />
       </div>
       <MessageInput
