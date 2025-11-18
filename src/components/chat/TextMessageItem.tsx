@@ -77,9 +77,7 @@ export function TextMessageItem({
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Pin
-                className={`h-3.5 w-3.5 ${
-                  isPinned ? "fill-current" : ""
-                }`}
+                className={`h-3.5 w-3.5 ${isPinned ? "fill-current" : ""}`}
               />
             )}
           </button>

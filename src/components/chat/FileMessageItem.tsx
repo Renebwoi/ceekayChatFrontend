@@ -78,9 +78,7 @@ export function FileMessageItem({
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Pin
-                className={`h-3.5 w-3.5 ${
-                  isPinned ? "fill-current" : ""
-                }`}
+                className={`h-3.5 w-3.5 ${isPinned ? "fill-current" : ""}`}
               />
             )}
           </button>
@@ -98,8 +96,7 @@ export function FileMessageItem({
       >
         <p className="font-semibold">{attachment.fileName}</p>
         <p className="text-xs opacity-70">
-          {(attachment.size / 1024 / 1024).toFixed(2)} MB •
-          {" "}
+          {(attachment.size / 1024 / 1024).toFixed(2)} MB •{" "}
           {message.sender?.name}
         </p>
       </a>

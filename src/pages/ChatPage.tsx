@@ -155,7 +155,11 @@ export function ChatPage() {
   }, []);
 
   const applyPinnedState = useCallback(
-    (courseId: string, pinned: Message | null, fallbackMessageId?: string | null) => {
+    (
+      courseId: string,
+      pinned: Message | null,
+      fallbackMessageId?: string | null
+    ) => {
       setMessagesMap((prev) => {
         const existing = normalizeMessageList(prev[courseId]);
         const targetId = pinned?.id ?? fallbackMessageId ?? null;
@@ -163,7 +167,11 @@ export function ChatPage() {
         const updated = existing.map((message) => {
           const normalizedMessage = normalizeMessage(message);
           if (pinned && message.id === pinned.id) {
-            return normalizeMessage({ ...normalizedMessage, ...pinned, isPinned: true });
+            return normalizeMessage({
+              ...normalizedMessage,
+              ...pinned,
+              isPinned: true,
+            });
           }
 
           if (!pinned && targetId && message.id === targetId) {
@@ -254,7 +262,11 @@ export function ChatPage() {
     (payload: unknown) => {
       const parsed = parsePinnedPayload(payload);
       if (!parsed) return;
-      applyPinnedState(parsed.courseId, parsed.message ?? null, parsed.messageId ?? null);
+      applyPinnedState(
+        parsed.courseId,
+        parsed.message ?? null,
+        parsed.messageId ?? null
+      );
     },
     [applyPinnedState]
   );
@@ -263,7 +275,11 @@ export function ChatPage() {
     (payload: unknown) => {
       const parsed = parsePinnedPayload(payload);
       if (!parsed) return;
-      applyPinnedState(parsed.courseId, null, parsed.messageId ?? parsed.message?.id ?? null);
+      applyPinnedState(
+        parsed.courseId,
+        null,
+        parsed.messageId ?? parsed.message?.id ?? null
+      );
     },
     [applyPinnedState]
   );
@@ -288,7 +304,7 @@ export function ChatPage() {
           selectedCourseId,
           content
         );
-  appendMessage(selectedCourseId, data);
+        appendMessage(selectedCourseId, data);
       } catch (error) {
         console.error($lf(203), "Failed to send message", error);
         const optimistic: Message = {
@@ -322,7 +338,7 @@ export function ChatPage() {
           file,
           caption
         );
-  appendMessage(selectedCourseId, data);
+        appendMessage(selectedCourseId, data);
       } catch (error) {
         console.error($lf(237), "Failed to upload file", error);
         const previewUrl = URL.createObjectURL(file);
@@ -359,7 +375,10 @@ export function ChatPage() {
       if (!selectedCourseId || !user) return;
       setPinningMessageId(messageId);
       try {
-        const { data } = await messageApi.pinMessage(selectedCourseId, messageId);
+        const { data } = await messageApi.pinMessage(
+          selectedCourseId,
+          messageId
+        );
         const pinnedMessage = isMessage(data)
           ? normalizeMessage({ ...data, isPinned: true })
           : null;
@@ -378,9 +397,16 @@ export function ChatPage() {
       if (!selectedCourseId || !user) return;
       setPinningMessageId(messageId);
       try {
-  const { data } = await messageApi.unpinMessage(selectedCourseId, messageId);
-  const responseMessage = isMessage(data) ? normalizeMessage(data) : null;
-        applyPinnedState(selectedCourseId, null, responseMessage?.id ?? messageId);
+        const { data } = await messageApi.unpinMessage(
+          selectedCourseId,
+          messageId
+        );
+        const responseMessage = isMessage(data) ? normalizeMessage(data) : null;
+        applyPinnedState(
+          selectedCourseId,
+          null,
+          responseMessage?.id ?? messageId
+        );
       } catch (error) {
         console.error($lf(279), "Failed to unpin message", error);
       } finally {
