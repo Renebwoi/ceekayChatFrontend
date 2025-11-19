@@ -77,6 +77,9 @@ const fallbackMessages: Message[] = [
   },
 ];
 
+const SEARCH_DEBOUNCE_MS = 300;
+const MIN_SEARCH_LENGTH = 2;
+
 export function ChatPage() {
   const { user, token, logout } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -86,7 +89,15 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>({});
   const [pinningMessageId, setPinningMessageId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searchCursor, setSearchCursor] = useState<string | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchHasMore, setSearchHasMore] = useState(false);
   const filePreviewUrls = useRef<string[]>([]);
+  const searchRequestRef = useRef(0);
+  const previousCourseIdRef = useRef<string | null>(null);
 
   const markCourseAsRead = useCallback(async (courseId: string) => {
     try {
@@ -118,6 +129,95 @@ export function ChatPage() {
     const pinned = currentMessages.find((message) => message.isPinned);
     return pinned ? pinned.id : null;
   }, [currentMessages]);
+
+  const trimmedSearchQuery = searchQuery.trim();
+  const isSearchActive =
+    Boolean(selectedCourseId) && trimmedSearchQuery.length >= MIN_SEARCH_LENGTH;
+
+  useEffect(() => {
+    if (previousCourseIdRef.current && previousCourseIdRef.current !== selectedCourseId) {
+      setSearchResults([]);
+      setSearchCursor(null);
+      setSearchHasMore(false);
+      setSearchError(null);
+      setSearchLoading(false);
+    }
+    previousCourseIdRef.current = selectedCourseId;
+  }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setSearchResults([]);
+      setSearchCursor(null);
+      setSearchHasMore(false);
+      setSearchError(null);
+      setSearchLoading(false);
+      return () => {};
+    }
+
+    if (trimmedSearchQuery.length < MIN_SEARCH_LENGTH) {
+      setSearchResults([]);
+      setSearchCursor(null);
+      setSearchHasMore(false);
+      setSearchError(null);
+      setSearchLoading(false);
+      return () => {};
+    }
+
+    const requestId = ++searchRequestRef.current;
+    let cancelled = false;
+    setSearchLoading(true);
+    setSearchError(null);
+
+    const timeoutId: ReturnType<typeof setTimeout> = setTimeout(async () => {
+      try {
+        const { data } = await messageApi.searchMessages(
+          selectedCourseId,
+          trimmedSearchQuery
+        );
+
+        if (cancelled || searchRequestRef.current !== requestId) {
+          return;
+        }
+
+        const normalized = normalizeMessageList(data?.messages);
+        setSearchResults(normalized);
+        const nextCursor =
+          typeof data?.nextCursor === "string" && data.nextCursor.length
+            ? data.nextCursor
+            : null;
+        setSearchCursor(nextCursor);
+        const rawHasMore =
+          typeof data.hasMore === "boolean" ? data.hasMore : undefined;
+        const hasMoreFlag =
+          typeof rawHasMore === "boolean"
+            ? Boolean(rawHasMore)
+            : Boolean(nextCursor);
+        setSearchHasMore(hasMoreFlag);
+      } catch (error) {
+        if (cancelled || searchRequestRef.current !== requestId) {
+          return;
+        }
+
+        console.error($lf(150), "Failed to search messages", error);
+        setSearchResults([]);
+        setSearchCursor(null);
+        setSearchHasMore(false);
+        setSearchError(
+          "We couldn't search messages right now. Please try again."
+        );
+      } finally {
+        if (!cancelled && searchRequestRef.current === requestId) {
+          setSearchLoading(false);
+        }
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [selectedCourseId, trimmedSearchQuery]);
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -351,6 +451,10 @@ export function ChatPage() {
     setSelectedCourseId(courseId);
   }, []);
 
+  const handleSearchQueryChange = useCallback((value: string) => {
+    setSearchQuery(value);
+  }, []);
+
   const handleSendMessage = useCallback(
     async (content: string) => {
       if (!selectedCourseId || !user) return;
@@ -386,15 +490,11 @@ export function ChatPage() {
   );
 
   const handleUploadFile = useCallback(
-    async (file: File, caption?: string) => {
+    async (file: File) => {
       if (!selectedCourseId || !user) return;
       setSending(true);
       try {
-        const { data } = await messageApi.uploadFile(
-          selectedCourseId,
-          file,
-          caption
-        );
+        const { data } = await messageApi.uploadFile(selectedCourseId, file);
         appendMessage(selectedCourseId, data);
         markCourseAsRead(selectedCourseId);
       } catch (error) {
@@ -405,7 +505,7 @@ export function ChatPage() {
           id: `temp-file-${Date.now()}`,
           courseId: selectedCourseId,
           senderId: user.id,
-          content: caption ?? null,
+          content: null,
           type: "FILE",
           createdAt: new Date().toISOString(),
           attachment: {
@@ -474,6 +574,58 @@ export function ChatPage() {
     [applyPinnedState, selectedCourseId, user]
   );
 
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchCursor(null);
+    setSearchHasMore(false);
+    setSearchError(null);
+    setSearchLoading(false);
+  }, []);
+
+  const handleSearchLoadMore = useCallback(async () => {
+    if (!selectedCourseId || !searchCursor) {
+      return;
+    }
+
+    const query = trimmedSearchQuery;
+    if (query.length < MIN_SEARCH_LENGTH) {
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError(null);
+
+    try {
+      const { data } = await messageApi.searchMessages(
+        selectedCourseId,
+        query,
+        searchCursor
+      );
+      const normalized = normalizeMessageList(data?.messages);
+      setSearchResults((prev) => [...prev, ...normalized]);
+      const nextCursor =
+        typeof data?.nextCursor === "string" && data.nextCursor.length
+          ? data.nextCursor
+          : null;
+      setSearchCursor(nextCursor);
+      const rawHasMore =
+        typeof data.hasMore === "boolean" ? data.hasMore : undefined;
+      const hasMoreFlag =
+        typeof rawHasMore === "boolean"
+          ? Boolean(rawHasMore)
+          : Boolean(nextCursor);
+      setSearchHasMore(hasMoreFlag);
+    } catch (error) {
+      console.error($lf(337), "Failed to load more search results", error);
+      setSearchError(
+        "We couldn't load more results. Please try again in a moment."
+      );
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [searchCursor, selectedCourseId, trimmedSearchQuery]);
+
   useEffect(
     () => () => {
       filePreviewUrls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -512,6 +664,16 @@ export function ChatPage() {
             onPinMessage={handlePinMessage}
             onUnpinMessage={handleUnpinMessage}
             pinningMessageId={pinningMessageId}
+            searchQuery={searchQuery}
+            onSearchQueryChange={handleSearchQueryChange}
+            onClearSearch={handleClearSearch}
+            isSearchActive={isSearchActive}
+            searchResults={searchResults}
+            searchLoading={searchLoading}
+            searchError={searchError}
+            searchHasMore={searchHasMore}
+            onSearchLoadMore={handleSearchLoadMore}
+            searchHighlightTerm={trimmedSearchQuery}
           />
         )
       ) : coursesLoading ? (

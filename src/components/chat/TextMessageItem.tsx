@@ -1,4 +1,5 @@
 import { Loader2, Pin } from "lucide-react";
+import type { ReactNode } from "react";
 import { Message } from "../../types/api";
 
 interface TextMessageItemProps {
@@ -10,6 +11,7 @@ interface TextMessageItemProps {
   isPinned?: boolean;
   pinning?: boolean;
   showPinnedLabel?: boolean;
+  highlightTerm?: string;
 }
 
 export function TextMessageItem({
@@ -21,6 +23,7 @@ export function TextMessageItem({
   isPinned,
   pinning,
   showPinnedLabel,
+  highlightTerm,
 }: TextMessageItemProps) {
   const handleTogglePin = () => {
     if (pinning) return;
@@ -32,6 +35,45 @@ export function TextMessageItem({
   };
 
   const pinButtonVisible = Boolean(canPin && (onPin || onUnpin));
+
+  const renderContent = (): ReactNode => {
+    const baseContent =
+      typeof message.content === "string" ? message.content : "";
+    const trimmedTerm = highlightTerm?.trim();
+
+    if (!trimmedTerm) {
+      return baseContent;
+    }
+
+    const escapedTerm = escapeRegExp(trimmedTerm);
+    if (!escapedTerm) {
+      return baseContent;
+    }
+
+    const regex = new RegExp(`(${escapedTerm})`, "gi");
+    const segments = baseContent.split(regex);
+
+    return segments.map((segment, index) => {
+      if (!segment) {
+        return segment;
+      }
+
+      if (index % 2 === 1) {
+        return (
+          <mark
+            key={`${message.id}-highlight-${index}`}
+            className={`rounded bg-amber-200 px-1 py-0.5 ${
+              isOwn ? "text-slate-900" : ""
+            }`}
+          >
+            {segment}
+          </mark>
+        );
+      }
+
+      return <span key={`${message.id}-text-${index}`}>{segment}</span>;
+    });
+  };
 
   return (
     <div
@@ -84,7 +126,7 @@ export function TextMessageItem({
         )}
       </div>
       <p className="mt-2 whitespace-pre-line leading-relaxed">
-        {message.content}
+        {renderContent()}
       </p>
       <p
         className={`mt-3 text-xs ${
@@ -98,4 +140,8 @@ export function TextMessageItem({
       </p>
     </div>
   );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

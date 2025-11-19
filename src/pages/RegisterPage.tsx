@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { RegisterForm } from "../components/auth/RegisterForm";
 import { useAuth } from "../hooks/useAuth";
-import { NonAdminUserRole } from "../types/api";
+import { RegisterPayload } from "../types/api";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -10,12 +10,7 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (payload: {
-    name: string;
-    email: string;
-    password: string;
-    role: NonAdminUserRole;
-  }) => {
+  const handleSubmit = async (payload: RegisterPayload) => {
     try {
       setLoading(true);
       setError(null);

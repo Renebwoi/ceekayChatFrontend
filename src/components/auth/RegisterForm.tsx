@@ -1,13 +1,8 @@
 import { useState } from "react";
-import { NonAdminUserRole } from "../../types/api";
+import { NonAdminUserRole, RegisterPayload } from "../../types/api";
 
 interface RegisterFormProps {
-  onSubmit: (payload: {
-    name: string;
-    email: string;
-    password: string;
-    role: NonAdminUserRole;
-  }) => void;
+  onSubmit: (payload: RegisterPayload) => void;
   loading?: boolean;
   error?: string | null;
 }
@@ -15,14 +10,18 @@ interface RegisterFormProps {
 const roles: NonAdminUserRole[] = ["STUDENT", "LECTURER"];
 
 export function RegisterForm({ onSubmit, loading, error }: RegisterFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegisterPayload>({
     name: "",
     email: "",
     password: "",
     role: "STUDENT" as NonAdminUserRole,
+    department: "",
   });
 
-  const handleChange = (field: keyof typeof formData, value: string) => {
+  const handleChange = <K extends keyof RegisterPayload>(
+    field: K,
+    value: RegisterPayload[K]
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -84,7 +83,9 @@ export function RegisterForm({ onSubmit, loading, error }: RegisterFormProps) {
           id="role"
           className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-slate-900 focus:outline-none"
           value={formData.role}
-          onChange={(e) => handleChange("role", e.target.value)}
+          onChange={(e) =>
+            handleChange("role", e.target.value as RegisterPayload["role"])
+          }
         >
           {roles.map((role) => (
             <option key={role} value={role}>
@@ -92,6 +93,22 @@ export function RegisterForm({ onSubmit, loading, error }: RegisterFormProps) {
             </option>
           ))}
         </select>
+      </div>
+      <div>
+        <label
+          className="text-sm font-medium text-slate-700"
+          htmlFor="department"
+        >
+          Department
+        </label>
+        <input
+          id="department"
+          required
+          className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-slate-900 focus:outline-none"
+          placeholder="e.g. Computer Science"
+          value={formData.department}
+          onChange={(e) => handleChange("department", e.target.value)}
+        />
       </div>
       {error && (
         <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">

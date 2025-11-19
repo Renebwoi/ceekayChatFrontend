@@ -11,6 +11,12 @@ interface MessageListProps {
   onPinMessage?: (messageId: string) => void;
   onUnpinMessage?: (messageId: string) => void;
   pinningMessageId?: string | null;
+  highlightTerm?: string;
+  showPinnedSection?: boolean;
+  emptyState?: {
+    title: string;
+    description?: string;
+  };
 }
 
 export function MessageList({
@@ -21,21 +27,27 @@ export function MessageList({
   onPinMessage,
   onUnpinMessage,
   pinningMessageId,
+  highlightTerm,
+  showPinnedSection = true,
+  emptyState,
 }: MessageListProps) {
   if (!messages.length) {
+    const emptyTitle = emptyState?.title ?? "No messages yet";
+    const emptyDescription = emptyState?.description ??
+      "Start the conversation by posting the first message.";
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">
-        <p className="text-lg font-semibold">No messages yet</p>
-        <p className="text-sm">
-          Start the conversation by posting the first message.
-        </p>
+        <p className="text-lg font-semibold">{emptyTitle}</p>
+        {emptyDescription && <p className="text-sm">{emptyDescription}</p>}
       </div>
     );
   }
 
-  const pinnedMessage = pinnedMessageId
-    ? messages.find((message) => message.id === pinnedMessageId)
-    : messages.find((message) => message.isPinned);
+  const pinnedMessage = showPinnedSection
+    ? pinnedMessageId
+      ? messages.find((message) => message.id === pinnedMessageId)
+      : messages.find((message) => message.isPinned)
+    : undefined;
 
   const otherMessages = pinnedMessage
     ? messages.filter((message) => message.id !== pinnedMessage.id)
@@ -75,13 +87,14 @@ export function MessageList({
         isPinned={isPinned}
         pinning={pinning}
         showPinnedLabel={isPinnedSection}
+        highlightTerm={highlightTerm}
       />
     );
   };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {pinnedMessage && (
+      {showPinnedSection && pinnedMessage && (
         <div className="shrink-0 border-b border-slate-200 bg-white/70 px-6 py-4 backdrop-blur">
           <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-amber-600">
             <div className="flex items-center gap-2">

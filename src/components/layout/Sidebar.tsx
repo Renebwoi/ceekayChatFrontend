@@ -20,6 +20,20 @@ export function Sidebar({
   isOpen,
   onClose,
 }: SidebarProps) {
+  const roleLabel = (() => {
+    switch (user.role) {
+      case "STUDENT":
+        return "Student";
+      case "LECTURER":
+        return "Lecturer";
+      case "ADMIN":
+      default:
+        return "Admin";
+    }
+  })();
+
+  const departmentText = user.department ? ` • ${user.department}` : "";
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -42,7 +56,10 @@ export function Sidebar({
               Logged in as
             </p>
             <p className="text-lg font-semibold text-slate-900">{user.name}</p>
-            <p className="text-sm text-slate-500">{user.email}</p>
+            <p className="text-sm text-slate-500">
+              {roleLabel}
+              {departmentText}
+            </p>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">

@@ -92,6 +92,7 @@ export function AdminPage() {
   const normalizeStudent = (student: StudentSummary): StudentSummary => ({
     ...student,
     isBanned: student.isBanned ?? false,
+    department: student.department ?? null,
   });
 
   const resolveList = <T,>(payload: unknown, key: string): T[] => {
@@ -526,7 +527,10 @@ export function AdminPage() {
                         <option value="">No lecturer</option>
                         {lecturers.map((lecturer) => (
                           <option key={lecturer.id} value={lecturer.id}>
-                            {lecturer.name} ({lecturer.email})
+                            {lecturer.name}
+                            {lecturer.department
+                              ? ` (${lecturer.department})`
+                              : ""}
                           </option>
                         ))}
                       </select>
@@ -567,9 +571,16 @@ export function AdminPage() {
                                 {course.code}
                               </p>
                               <p className="mt-1 text-xs text-slate-500">
-                                {course.lecturer
-                                  ? `Lecturer: ${course.lecturer.name}`
-                                  : "No lecturer assigned"}
+                                {course.lecturer ? (
+                                  <>
+                                    Lecturer: {course.lecturer.name}
+                                    {course.lecturer.department
+                                      ? ` (${course.lecturer.department})`
+                                      : ""}
+                                  </>
+                                ) : (
+                                  "No lecturer assigned"
+                                )}
                               </p>
                               <p className="text-xs text-slate-500">
                                 {course.studentCount ?? 0} enrolled students
@@ -593,6 +604,9 @@ export function AdminPage() {
                                 {lecturers.map((lecturer) => (
                                   <option key={lecturer.id} value={lecturer.id}>
                                     {lecturer.name}
+                                    {lecturer.department
+                                      ? ` (${lecturer.department})`
+                                      : ""}
                                   </option>
                                 ))}
                               </select>
@@ -695,7 +709,10 @@ export function AdminPage() {
                             </option>
                             {availableStudentsForCourse.map((student) => (
                               <option key={student.id} value={student.id}>
-                                {student.name} ({student.email})
+                                {student.name}
+                                {student.department
+                                  ? ` (${student.department})`
+                                  : ""}
                               </option>
                             ))}
                           </select>
@@ -729,7 +746,7 @@ export function AdminPage() {
                                     {student.name}
                                   </p>
                                   <p className="text-xs text-slate-500">
-                                    {student.email}
+                                    {student.department || "Department N/A"}
                                   </p>
                                   {student.isBanned && (
                                     <p className="text-xs font-semibold text-red-600">
@@ -780,7 +797,7 @@ export function AdminPage() {
                           {student.name}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {student.email}
+                          {student.department || "Department N/A"}
                         </p>
                         {student.isBanned ? (
                           <p className="text-xs font-semibold text-red-600">

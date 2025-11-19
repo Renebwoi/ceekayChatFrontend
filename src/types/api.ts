@@ -6,6 +6,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  department?: string | null;
 }
 
 export interface AuthResponse {
@@ -23,6 +24,7 @@ export interface RegisterPayload {
   email: string;
   password: string;
   role: NonAdminUserRole;
+  department: string;
 }
 
 export interface Attachment {
@@ -63,6 +65,7 @@ export interface UserSummary {
   name: string;
   email: string;
   role: UserRole;
+  department?: string | null;
 }
 
 export interface LecturerSummary extends UserSummary {}

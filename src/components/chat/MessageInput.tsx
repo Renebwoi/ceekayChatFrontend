@@ -3,7 +3,7 @@ import { ChangeEvent, useRef, useState } from "react";
 
 interface MessageInputProps {
   onSendMessage: (content: string) => void;
-  onUploadFile: (file: File, caption?: string) => void;
+  onUploadFile: (file: File) => void;
   disabled?: boolean;
 }
 
@@ -13,7 +13,6 @@ export function MessageInput({
   disabled,
 }: MessageInputProps) {
   const [message, setMessage] = useState("");
-  const [caption, setCaption] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleSend = () => {
@@ -25,8 +24,7 @@ export function MessageInput({
   const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    onUploadFile(file, caption || undefined);
-    setCaption("");
+    onUploadFile(file);
     event.target.value = "";
   };
 
@@ -47,14 +45,6 @@ export function MessageInput({
             placeholder="Type your message..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            disabled={disabled}
-          />
-          <input
-            type="text"
-            className="rounded-2xl border border-slate-100 px-4 py-2 text-xs text-slate-500 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none"
-            placeholder="Optional caption for file uploads"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
             disabled={disabled}
           />
         </div>
