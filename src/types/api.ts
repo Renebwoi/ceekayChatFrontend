@@ -74,6 +74,7 @@ export interface Course {
   description?: string;
   lecturer?: UserSummary | null;
   studentCount?: number;
+  unreadCount: number;
 }
 
 export interface StudentSummary extends UserSummary {

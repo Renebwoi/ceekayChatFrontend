@@ -14,6 +14,7 @@ const fallbackCourses: Course[] = [
     title: "Introduction to Computer Science",
     description:
       "Kick off foundational programming concepts and collaborative problem solving.",
+    unreadCount: 0,
   },
   {
     id: "course-2",
@@ -21,6 +22,7 @@ const fallbackCourses: Course[] = [
     title: "Linear Algebra for Engineers",
     description:
       "Discuss weekly problem sets, exam prep, and project milestones.",
+    unreadCount: 0,
   },
 ];
 
@@ -86,6 +88,21 @@ export function ChatPage() {
   const [pinningMessageId, setPinningMessageId] = useState<string | null>(null);
   const filePreviewUrls = useRef<string[]>([]);
 
+  const markCourseAsRead = useCallback(async (courseId: string) => {
+    try {
+      await courseApi.markCourseRead(courseId);
+      setCourses((prev) =>
+        prev.map((course) =>
+          course.id === courseId ? { ...course, unreadCount: 0 } : course
+        )
+      );
+      return true;
+    } catch (error) {
+      console.error($lf(109), "Failed to mark course as read", error);
+      return false;
+    }
+  }, []);
+
   const selectedCourse = useMemo(() => {
     if (!Array.isArray(courses)) {
       return null;
@@ -107,11 +124,15 @@ export function ChatPage() {
       setCoursesLoading(true);
       try {
         const { data } = await courseApi.getMyCourses();
-        const normalizedCourses = Array.isArray(data)
-          ? data
+        const rawCourses = Array.isArray(data)
+          ? (data as Course[])
           : Array.isArray((data as { courses?: Course[] })?.courses)
-          ? (data as { courses?: Course[] }).courses!
+          ? ((data as { courses?: Course[] }).courses as Course[])
           : [];
+
+        const normalizedCourses = rawCourses.map((course) =>
+          normalizeCourseEntity(course)
+        );
 
         setCourses(normalizedCourses);
         if (!selectedCourseId && normalizedCourses.length) {
@@ -119,9 +140,12 @@ export function ChatPage() {
         }
       } catch (error) {
         console.error($lf(115), "Failed to load courses", error);
-        setCourses(fallbackCourses);
-        if (!selectedCourseId && fallbackCourses.length) {
-          setSelectedCourseId(fallbackCourses[0].id);
+        const normalizedFallback = fallbackCourses.map((course) =>
+          normalizeCourseEntity(course)
+        );
+        setCourses(normalizedFallback);
+        if (!selectedCourseId && normalizedFallback.length) {
+          setSelectedCourseId(normalizedFallback[0].id);
         }
       } finally {
         setCoursesLoading(false);
@@ -228,6 +252,9 @@ export function ChatPage() {
         const normalizedMessages = normalizeMessageList(data?.messages);
         if (!ignore) {
           setMessagesForCourse(selectedCourseId, normalizedMessages);
+          if (!ignore) {
+            await markCourseAsRead(selectedCourseId);
+          }
         }
       } catch (error) {
         console.error($lf(158), "Failed to load messages", error);
@@ -249,13 +276,42 @@ export function ChatPage() {
     return () => {
       ignore = true;
     };
-  }, [selectedCourseId, setMessagesForCourse]);
+  }, [markCourseAsRead, selectedCourseId, setMessagesForCourse]);
 
   const handleSocketMessage = useCallback(
     (incoming: Message) => {
       appendMessage(incoming.courseId, incoming);
+      const senderId =
+        typeof incoming.senderId === "string"
+          ? incoming.senderId
+          : incoming.sender && typeof incoming.sender.id === "string"
+          ? incoming.sender.id
+          : null;
+      const currentUserId = user?.id ?? null;
+
+      if (incoming.courseId === selectedCourseId) {
+        markCourseAsRead(incoming.courseId);
+      }
+
+      setCourses((prev) =>
+        prev.map((course) => {
+          if (course.id !== incoming.courseId) {
+            return course;
+          }
+          if (senderId && currentUserId && senderId === currentUserId) {
+            return course;
+          }
+          if (incoming.courseId === selectedCourseId) {
+            return { ...course, unreadCount: 0 };
+          }
+          return {
+            ...course,
+            unreadCount: course.unreadCount + 1,
+          };
+        })
+      );
     },
-    [appendMessage]
+    [appendMessage, markCourseAsRead, selectedCourseId, user?.id]
   );
 
   const handleSocketPinned = useCallback(
@@ -305,6 +361,7 @@ export function ChatPage() {
           content
         );
         appendMessage(selectedCourseId, data);
+        markCourseAsRead(selectedCourseId);
       } catch (error) {
         console.error($lf(203), "Failed to send message", error);
         const optimistic: Message = {
@@ -325,7 +382,7 @@ export function ChatPage() {
         setSending(false);
       }
     },
-    [appendMessage, selectedCourseId, user]
+    [appendMessage, markCourseAsRead, selectedCourseId, user]
   );
 
   const handleUploadFile = useCallback(
@@ -339,6 +396,7 @@ export function ChatPage() {
           caption
         );
         appendMessage(selectedCourseId, data);
+        markCourseAsRead(selectedCourseId);
       } catch (error) {
         console.error($lf(237), "Failed to upload file", error);
         const previewUrl = URL.createObjectURL(file);
@@ -367,7 +425,7 @@ export function ChatPage() {
         setSending(false);
       }
     },
-    [appendMessage, selectedCourseId, user]
+    [appendMessage, markCourseAsRead, selectedCourseId, user]
   );
 
   const handlePinMessage = useCallback(
@@ -472,6 +530,16 @@ export function ChatPage() {
       )}
     </MainLayout>
   );
+}
+
+function normalizeCourseEntity(course: Course): Course {
+  const rawCount = (course as Course & { unreadCount?: number }).unreadCount;
+  const parsedCount =
+    typeof rawCount === "number" && Number.isFinite(rawCount) ? rawCount : 0;
+  return {
+    ...course,
+    unreadCount: parsedCount,
+  };
 }
 
 function normalizeMessageState(value: unknown): Message[] {

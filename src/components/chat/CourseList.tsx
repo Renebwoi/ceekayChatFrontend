@@ -49,7 +49,14 @@ export function CourseList({
                   : "border-slate-200 bg-white text-slate-900"
               }`}
             >
-              <p className="text-sm font-semibold">{course.title}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">{course.title}</p>
+                {course.unreadCount > 0 && (
+                  <span className="min-w-[1.5rem] rounded-full bg-amber-500 px-2 py-0.5 text-center text-xs font-semibold text-white">
+                    {course.unreadCount}
+                  </span>
+                )}
+              </div>
               <p className="text-xs uppercase tracking-wide text-slate-500">
                 {course.code}
               </p>

@@ -86,6 +86,7 @@ export function AdminPage() {
     ...course,
     lecturer: course.lecturer ?? null,
     studentCount: course.studentCount ?? 0,
+    unreadCount: course.unreadCount ?? 0,
   });
 
   const normalizeStudent = (student: StudentSummary): StudentSummary => ({
