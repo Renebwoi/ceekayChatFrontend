@@ -33,7 +33,8 @@ export function MessageList({
 }: MessageListProps) {
   if (!messages.length) {
     const emptyTitle = emptyState?.title ?? "No messages yet";
-    const emptyDescription = emptyState?.description ??
+    const emptyDescription =
+      emptyState?.description ??
       "Start the conversation by posting the first message.";
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500">

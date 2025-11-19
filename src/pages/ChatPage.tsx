@@ -135,7 +135,10 @@ export function ChatPage() {
     Boolean(selectedCourseId) && trimmedSearchQuery.length >= MIN_SEARCH_LENGTH;
 
   useEffect(() => {
-    if (previousCourseIdRef.current && previousCourseIdRef.current !== selectedCourseId) {
+    if (
+      previousCourseIdRef.current &&
+      previousCourseIdRef.current !== selectedCourseId
+    ) {
       setSearchResults([]);
       setSearchCursor(null);
       setSearchHasMore(false);
