@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { RegisterForm } from "../components/auth/RegisterForm";
 import { useAuth } from "../hooks/useAuth";
-import { UserRole } from "../types/api";
+import { NonAdminUserRole } from "../types/api";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -14,7 +14,7 @@ export function RegisterPage() {
     name: string;
     email: string;
     password: string;
-    role: UserRole;
+    role: NonAdminUserRole;
   }) => {
     try {
       setLoading(true);

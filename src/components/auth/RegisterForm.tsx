@@ -1,25 +1,25 @@
 import { useState } from "react";
-import { UserRole } from "../../types/api";
+import { NonAdminUserRole } from "../../types/api";
 
 interface RegisterFormProps {
   onSubmit: (payload: {
     name: string;
     email: string;
     password: string;
-    role: UserRole;
+    role: NonAdminUserRole;
   }) => void;
   loading?: boolean;
   error?: string | null;
 }
 
-const roles: UserRole[] = ["STUDENT", "LECTURER"];
+const roles: NonAdminUserRole[] = ["STUDENT", "LECTURER"];
 
 export function RegisterForm({ onSubmit, loading, error }: RegisterFormProps) {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    role: "STUDENT" as UserRole,
+    role: "STUDENT" as NonAdminUserRole,
   });
 
   const handleChange = (field: keyof typeof formData, value: string) => {

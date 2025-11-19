@@ -1,4 +1,5 @@
-export type UserRole = "STUDENT" | "LECTURER";
+export type UserRole = "STUDENT" | "LECTURER" | "ADMIN";
+export type NonAdminUserRole = Exclude<UserRole, "ADMIN">;
 
 export interface User {
   id: string;
@@ -21,7 +22,7 @@ export interface RegisterPayload {
   name: string;
   email: string;
   password: string;
-  role: UserRole;
+  role: NonAdminUserRole;
 }
 
 export interface Attachment {
@@ -57,9 +58,39 @@ export interface Message {
   } | null;
 }
 
+export interface UserSummary {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface LecturerSummary extends UserSummary {}
+
 export interface Course {
   id: string;
   code: string;
   title: string;
   description?: string;
+  lecturer?: UserSummary | null;
+  studentCount?: number;
+}
+
+export interface StudentSummary extends UserSummary {
+  isBanned?: boolean;
+}
+
+export interface AdminCourse extends Course {
+  lecturer?: LecturerSummary | null;
+  studentCount?: number;
+}
+
+export interface CourseEnrollment {
+  courseId: string;
+  students: StudentSummary[];
+}
+
+export interface CourseEnrollmentSummary {
+  courseId: string;
+  student: StudentSummary;
 }

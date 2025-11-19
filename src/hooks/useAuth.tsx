@@ -1,22 +1,35 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
-import { AuthResponse, LoginPayload, RegisterPayload, User } from '../types/api';
-import { authApi } from '../api/authApi';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
+import {
+  AuthResponse,
+  LoginPayload,
+  RegisterPayload,
+  User,
+} from "../types/api";
+import { authApi } from "../api/authApi";
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
-  login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  login: (payload: LoginPayload) => Promise<User>;
+  register: (payload: RegisterPayload) => Promise<User>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const TOKEN_KEY = 'chatroomx_token';
-const USER_KEY = 'chatroomx_user';
+const TOKEN_KEY = "chatroomx_token";
+const USER_KEY = "chatroomx_user";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem(TOKEN_KEY)
+  );
   const [user, setUser] = useState<User | null>(() => {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? (JSON.parse(raw) as User) : null;
@@ -32,11 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (payload: LoginPayload) => {
     const { data } = await authApi.login(payload);
     handleAuthSuccess(data);
+    return data.user;
   };
 
   const register = async (payload: RegisterPayload) => {
     const { data } = await authApi.register(payload);
     handleAuthSuccess(data);
+    return data.user;
   };
 
   const logout = () => {
@@ -51,17 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, token]
   );
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
 }
