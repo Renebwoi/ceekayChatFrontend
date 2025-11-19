@@ -129,7 +129,9 @@ export function FileMessageItem({
           isOwn
             ? "border-slate-700 bg-slate-800"
             : "border-slate-200 bg-slate-50"
-        } ${isDownloading ? "cursor-wait opacity-70" : "hover:border-slate-300"}`}
+        } ${
+          isDownloading ? "cursor-wait opacity-70" : "hover:border-slate-300"
+        }`}
       >
         <p className="font-semibold flex items-center gap-2">
           {attachment.fileName}
