@@ -16,6 +16,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
+import { useAuth } from "../hooks/useAuth";
 
 interface CourseFormState {
   code: string;
@@ -28,6 +29,7 @@ interface EnrollmentState {
 }
 
 export function AdminPage() {
+  const { logout } = useAuth();
   const [activeTab, setActiveTab] = useState("courses");
   const [courses, setCourses] = useState<AdminCourse[]>([]);
   const [lecturers, setLecturers] = useState<LecturerSummary[]>([]);
@@ -52,6 +54,10 @@ export function AdminPage() {
     setFeedback(null);
     setError(null);
   };
+
+  const handleLogout = useCallback(() => {
+    logout();
+  }, [logout]);
 
   const extractErrorMessage = (err: unknown, fallback: string) => {
     if (isAxiosError(err)) {
@@ -432,13 +438,18 @@ export function AdminPage() {
               Manage courses, enrollments, and student access
             </h1>
           </div>
-          <Button
-            variant="ghost"
-            onClick={fetchInitialData}
-            disabled={isLoading}
-          >
-            {isLoading ? "Refreshing…" : "Refresh data"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={fetchInitialData}
+              disabled={isLoading}
+            >
+              {isLoading ? "Refreshing…" : "Refresh data"}
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 

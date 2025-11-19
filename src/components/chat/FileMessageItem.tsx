@@ -1,5 +1,7 @@
+import { useCallback, useState, type MouseEvent } from "react";
 import { Loader2, Paperclip, Pin } from "lucide-react";
 import { Message } from "../../types/api";
+import { useAuth } from "../../hooks/useAuth";
 
 interface FileMessageItemProps {
   message: Message;
@@ -25,6 +27,8 @@ export function FileMessageItem({
   if (!message.attachment) return null;
 
   const { attachment } = message;
+  const { token } = useAuth();
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleTogglePin = () => {
     if (pinning) return;
@@ -36,6 +40,40 @@ export function FileMessageItem({
   };
 
   const pinButtonVisible = Boolean(canPin && (onPin || onUnpin));
+
+  const handleDownload = useCallback(
+    async (event: MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+      if (isDownloading) return;
+
+      setIsDownloading(true);
+      try {
+        const response = await fetch(attachment.url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Download failed with status ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = attachment.fileName || "download";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+      } catch (err) {
+        console.error("Failed to download attachment", err);
+        window.open(attachment.url, "_blank", "noopener,noreferrer");
+      } finally {
+        setIsDownloading(false);
+      }
+    },
+    [attachment.fileName, attachment.url, isDownloading, token]
+  );
 
   return (
     <div
@@ -86,15 +124,17 @@ export function FileMessageItem({
       </div>
       <a
         href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
+        onClick={handleDownload}
         className={`flex flex-col rounded-xl border border-dashed px-4 py-3 transition ${
           isOwn
             ? "border-slate-700 bg-slate-800"
             : "border-slate-200 bg-slate-50"
-        }`}
+        } ${isDownloading ? "cursor-wait opacity-70" : "hover:border-slate-300"}`}
       >
-        <p className="font-semibold">{attachment.fileName}</p>
+        <p className="font-semibold flex items-center gap-2">
+          {attachment.fileName}
+          {isDownloading && <Loader2 className="h-4 w-4 animate-spin" />}
+        </p>
         <p className="text-xs opacity-70">
           {(attachment.size / 1024 / 1024).toFixed(2)} MB •{" "}
           {message.sender?.name}
