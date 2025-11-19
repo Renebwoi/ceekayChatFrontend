@@ -1,7 +1,7 @@
 import { useCallback, useState, type MouseEvent } from "react";
 import { Loader2, Paperclip, Pin } from "lucide-react";
+import { messageApi } from "../../api/messageApi";
 import { Message } from "../../types/api";
-import { useAuth } from "../../hooks/useAuth";
 
 interface FileMessageItemProps {
   message: Message;
@@ -27,7 +27,6 @@ export function FileMessageItem({
   if (!message.attachment) return null;
 
   const { attachment } = message;
-  const { token } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleTogglePin = () => {
@@ -48,31 +47,35 @@ export function FileMessageItem({
 
       setIsDownloading(true);
       try {
-        const response = await fetch(attachment.url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-
-        if (!response.ok) {
-          throw new Error(`Download failed with status ${response.status}`);
-        }
-
-        const blob = await response.blob();
+        const response = await messageApi.downloadAttachment(
+          message.courseId,
+          message.id,
+          attachment.downloadUrl
+        );
+        const blob = response.data;
+        const fileName =
+          deriveFileName(response.headers) || attachment.fileName || "download";
         const objectUrl = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = objectUrl;
-        anchor.download = attachment.fileName || "download";
+        anchor.download = fileName;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(objectUrl);
       } catch (err) {
         console.error("Failed to download attachment", err);
-        window.open(attachment.url, "_blank", "noopener,noreferrer");
       } finally {
         setIsDownloading(false);
       }
     },
-    [attachment.fileName, attachment.url, isDownloading, token]
+    [
+      attachment.downloadUrl,
+      attachment.fileName,
+      isDownloading,
+      message.courseId,
+      message.id,
+    ]
   );
 
   return (
@@ -123,7 +126,7 @@ export function FileMessageItem({
         )}
       </div>
       <a
-        href={attachment.url}
+        href={attachment.downloadUrl ?? "#"}
         onClick={handleDownload}
         className={`flex flex-col rounded-xl border border-dashed px-4 py-3 transition ${
           isOwn
@@ -144,4 +147,62 @@ export function FileMessageItem({
       </a>
     </div>
   );
+}
+
+function deriveFileName(headers: unknown): string | null {
+  if (!headers || typeof headers !== "object") {
+    return null;
+  }
+
+  const withGetter = headers as { get?: (name: string) => string | null };
+  const recordHeaders = headers as Record<string, unknown>;
+
+  const resolveHeader = (name: string): string | null => {
+    const getterValue = typeof withGetter.get === "function"
+      ? withGetter.get(name)
+      : null;
+    if (getterValue) {
+      return getterValue;
+    }
+
+    const directValue = recordHeaders[name];
+    if (typeof directValue === "string" && directValue) {
+      return directValue;
+    }
+
+    const lowerValue = recordHeaders[name.toLowerCase()];
+    if (typeof lowerValue === "string" && lowerValue) {
+      return lowerValue;
+    }
+
+    return null;
+  };
+
+  const disposition =
+    resolveHeader("content-disposition") ||
+    resolveHeader("Content-Disposition");
+
+  if (!disposition) {
+    return null;
+  }
+
+  const match = /filename\*=UTF-8''([^;\n]+)|filename="?([^";\n]+)"?/i.exec(
+    disposition
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const raw = match[1] || match[2];
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(raw);
+  } catch (error) {
+    console.warn("Failed to decode filename from header", error);
+    return raw;
+  }
 }

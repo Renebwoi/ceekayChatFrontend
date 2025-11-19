@@ -33,6 +33,7 @@ export interface Attachment {
   mimeType: string;
   size: number;
   url: string;
+  downloadUrl?: string;
 }
 
 export type MessageType = "TEXT" | "FILE";
