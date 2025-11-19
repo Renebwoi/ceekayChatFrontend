@@ -1,12 +1,15 @@
 import axios from "axios";
 
+// Resolve the API base URL from Vite envs, defaulting to the local backend for dev.
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
+// Shared Axios instance so every API helper inherits consistent settings.
 const axiosClient = axios.create({
   baseURL: apiBaseUrl,
   withCredentials: false,
 });
 
+// Inject the JWT on every request when the browser has an active session.
 axiosClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("chatroomx_token");
   if (token) {
@@ -15,6 +18,7 @@ axiosClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Normalize auth failures so the UI can force logout or display targeted messaging.
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -67,6 +71,7 @@ function extractErrorMessage(input: unknown): string | null {
   return null;
 }
 
+// Clear session state and redirect so the user sees the relevant auth banner.
 function handleForcedLogout(status: "banned" | "access-denied") {
   localStorage.removeItem("chatroomx_token");
   localStorage.removeItem("chatroomx_user");
