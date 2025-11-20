@@ -2,10 +2,7 @@ import { useCallback, useState, type MouseEvent } from "react";
 import { Loader2, Paperclip, Pin } from "lucide-react";
 import { messageApi } from "../../api/messageApi";
 import { Message } from "../../types/api";
-import {
-  getLatestReplyLabel,
-  getMessagePreview,
-} from "./messageUtils";
+import { getLatestReplyLabel, getMessagePreview } from "./messageUtils";
 
 interface FileMessageItemProps {
   message: Message;
@@ -192,7 +189,8 @@ export function FileMessageItem({
           {isDownloading && <Loader2 className="h-4 w-4 animate-spin" />}
         </p>
         <p className="text-xs opacity-70">
-          {(attachment.size / 1024 / 1024).toFixed(2)} MB • {message.sender?.name}
+          {(attachment.size / 1024 / 1024).toFixed(2)} MB •{" "}
+          {message.sender?.name}
         </p>
       </a>
       {(onReply || (hasReplies && onOpenThread && !isThreadMessage)) && (

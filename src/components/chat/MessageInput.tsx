@@ -4,8 +4,14 @@ import { Message } from "../../types/api";
 import { getMessagePreview } from "./messageUtils";
 
 interface MessageInputProps {
-  onSendMessage: (content: string, options?: { parentMessageId?: string | null }) => void;
-  onUploadFile: (file: File, options?: { parentMessageId?: string | null }) => void;
+  onSendMessage: (
+    content: string,
+    options?: { parentMessageId?: string | null }
+  ) => void;
+  onUploadFile: (
+    file: File,
+    options?: { parentMessageId?: string | null }
+  ) => void;
   disabled?: boolean;
   replyTo?: Message | null;
   onCancelReply?: () => void;

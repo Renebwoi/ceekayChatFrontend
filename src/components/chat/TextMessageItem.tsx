@@ -1,10 +1,7 @@
 import { Loader2, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 import { Message } from "../../types/api";
-import {
-  getLatestReplyLabel,
-  getMessagePreview,
-} from "./messageUtils";
+import { getLatestReplyLabel, getMessagePreview } from "./messageUtils";
 
 interface TextMessageItemProps {
   message: Message;

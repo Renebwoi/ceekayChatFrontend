@@ -7,8 +7,14 @@ import { ThreadPanel } from "./ThreadPanel";
 interface ChatWindowProps {
   messages: Message[];
   currentUserId?: string;
-  onSendMessage: (content: string, options?: { parentMessageId?: string | null }) => void;
-  onUploadFile: (file: File, options?: { parentMessageId?: string | null }) => void;
+  onSendMessage: (
+    content: string,
+    options?: { parentMessageId?: string | null }
+  ) => void;
+  onUploadFile: (
+    file: File,
+    options?: { parentMessageId?: string | null }
+  ) => void;
   disabled?: boolean;
   canPin?: boolean;
   pinnedMessageId?: string | null;

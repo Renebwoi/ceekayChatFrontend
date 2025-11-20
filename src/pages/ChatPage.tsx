@@ -100,8 +100,9 @@ export function ChatPage() {
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>({});
   const [pinningMessageId, setPinningMessageId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
-  const [activeThreadParentId, setActiveThreadParentId] =
-    useState<string | null>(null);
+  const [activeThreadParentId, setActiveThreadParentId] = useState<
+    string | null
+  >(null);
   const [threadMessages, setThreadMessages] = useState<Message[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadCursor, setThreadCursor] = useState<string | null>(null);
@@ -331,9 +332,7 @@ export function ChatPage() {
         setThreadMessages([]);
         setThreadCursor(null);
         setThreadHasMore(false);
-        setThreadError(
-          "We couldn't load the reply thread. Please try again."
-        );
+        setThreadError("We couldn't load the reply thread. Please try again.");
       } finally {
         if (!cancelled) {
           setThreadLoading(false);
@@ -464,8 +463,7 @@ export function ChatPage() {
       }
       const parentId = message.parentMessageId ?? message.id;
       selectThread(parentId, message.courseId);
-      const parent =
-        messageLookup.get(parentId) ?? normalizeMessage(message);
+      const parent = messageLookup.get(parentId) ?? normalizeMessage(message);
       setReplyTarget(parent);
     },
     [messageLookup, selectThread, selectedCourseId]
@@ -508,7 +506,7 @@ export function ChatPage() {
         activeThreadParentId,
         threadCursor
       );
-  const normalized = extractMessagesFromResponse(data);
+      const normalized = extractMessagesFromResponse(data);
       const cacheKey = makeThreadCacheKey(
         selectedCourseId,
         activeThreadParentId
@@ -730,13 +728,11 @@ export function ChatPage() {
   }, []);
 
   const handleSendMessage = useCallback(
-    async (
-      content: string,
-      options?: { parentMessageId?: string | null }
-    ) => {
+    async (content: string, options?: { parentMessageId?: string | null }) => {
       if (!selectedCourseId || !user) return;
 
-      const parentMessageId = options?.parentMessageId ?? replyTarget?.id ?? null;
+      const parentMessageId =
+        options?.parentMessageId ?? replyTarget?.id ?? null;
       setSending(true);
       try {
         const { data } = await messageApi.sendMessage(selectedCourseId, {
@@ -782,13 +778,11 @@ export function ChatPage() {
   );
 
   const handleUploadFile = useCallback(
-    async (
-      file: File,
-      options?: { parentMessageId?: string | null }
-    ) => {
+    async (file: File, options?: { parentMessageId?: string | null }) => {
       if (!selectedCourseId || !user) return;
 
-      const parentMessageId = options?.parentMessageId ?? replyTarget?.id ?? null;
+      const parentMessageId =
+        options?.parentMessageId ?? replyTarget?.id ?? null;
       setSending(true);
       try {
         const { data } = await messageApi.uploadFile(selectedCourseId, file, {
