@@ -38,6 +38,18 @@ export interface Attachment {
 
 export type MessageType = "TEXT" | "FILE";
 
+export interface MessageReplySummary {
+  id: string;
+  createdAt: string;
+  preview?: string | null;
+  contentPreview?: string | null;
+  sender?: {
+    id: string;
+    name: string;
+    role: UserRole;
+  } | null;
+}
+
 export interface Message {
   id: string;
   courseId: string;
@@ -59,6 +71,9 @@ export interface Message {
     name: string;
     role: UserRole;
   } | null;
+  parentMessageId?: string | null;
+  replyCount?: number;
+  latestReply?: MessageReplySummary | null;
 }
 
 export interface UserSummary {

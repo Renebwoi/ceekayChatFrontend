@@ -80,6 +80,16 @@ const fallbackMessages: Message[] = [
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_SEARCH_LENGTH = 2;
 
+interface ThreadCacheEntry {
+  messages: Message[];
+  cursor: string | null;
+  hasMore: boolean;
+}
+
+function makeThreadCacheKey(courseId: string, parentId: string): string {
+  return `${courseId}__${parentId}`;
+}
+
 export function ChatPage() {
   const { user, token, logout } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -89,6 +99,14 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [messagesMap, setMessagesMap] = useState<Record<string, Message[]>>({});
   const [pinningMessageId, setPinningMessageId] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  const [activeThreadParentId, setActiveThreadParentId] =
+    useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<Message[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadCursor, setThreadCursor] = useState<string | null>(null);
+  const [threadHasMore, setThreadHasMore] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searchCursor, setSearchCursor] = useState<string | null>(null);
@@ -98,6 +116,22 @@ export function ChatPage() {
   const filePreviewUrls = useRef<string[]>([]);
   const searchRequestRef = useRef(0);
   const previousCourseIdRef = useRef<string | null>(null);
+  const activeThreadRef = useRef<string | null>(null);
+  const threadCacheRef = useRef<Map<string, ThreadCacheEntry>>(new Map());
+
+  useEffect(() => {
+    activeThreadRef.current = activeThreadParentId;
+  }, [activeThreadParentId]);
+
+  useEffect(() => {
+    setReplyTarget(null);
+    setActiveThreadParentId(null);
+    setThreadMessages([]);
+    setThreadCursor(null);
+    setThreadHasMore(false);
+    setThreadError(null);
+    threadCacheRef.current.clear();
+  }, [selectedCourseId]);
 
   const markCourseAsRead = useCallback(async (courseId: string) => {
     try {
@@ -129,6 +163,25 @@ export function ChatPage() {
     const pinned = currentMessages.find((message) => message.isPinned);
     return pinned ? pinned.id : null;
   }, [currentMessages]);
+
+  const messageLookup = useMemo(() => {
+    const map = new Map<string, Message>();
+    currentMessages.forEach((message) => map.set(message.id, message));
+    threadMessages.forEach((message) => map.set(message.id, message));
+    return map;
+  }, [currentMessages, threadMessages]);
+
+  const threadParentMessage = useMemo(() => {
+    if (!activeThreadParentId) {
+      return null;
+    }
+    return messageLookup.get(activeThreadParentId) ?? null;
+  }, [activeThreadParentId, messageLookup]);
+
+  const getParentMessage = useCallback(
+    (messageId: string) => messageLookup.get(messageId) ?? null,
+    [messageLookup]
+  );
 
   const trimmedSearchQuery = searchQuery.trim();
   const isSearchActive =
@@ -223,6 +276,79 @@ export function ChatPage() {
   }, [selectedCourseId, trimmedSearchQuery]);
 
   useEffect(() => {
+    if (!selectedCourseId || !activeThreadParentId) {
+      setThreadMessages([]);
+      setThreadCursor(null);
+      setThreadHasMore(false);
+      setThreadLoading(false);
+      setThreadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadReplies = async () => {
+      setThreadLoading(true);
+      setThreadError(null);
+      try {
+        const { data } = await messageApi.getReplies(
+          selectedCourseId,
+          activeThreadParentId
+        );
+        if (cancelled) {
+          return;
+        }
+        const normalized = extractMessagesFromResponse(data);
+        const cacheKey = makeThreadCacheKey(
+          selectedCourseId,
+          activeThreadParentId
+        );
+        const existingEntry = threadCacheRef.current.get(cacheKey);
+        const mergedMessages = mergeThreadMessages(
+          existingEntry?.messages ?? [],
+          normalized
+        );
+        setThreadMessages(mergedMessages);
+        const nextCursor =
+          typeof data?.nextCursor === "string" && data.nextCursor.length
+            ? data.nextCursor
+            : null;
+        setThreadCursor(nextCursor);
+        const hasMoreFlag =
+          typeof data?.hasMore === "boolean"
+            ? Boolean(data.hasMore)
+            : Boolean(nextCursor);
+        setThreadHasMore(hasMoreFlag);
+        threadCacheRef.current.set(cacheKey, {
+          messages: mergedMessages,
+          cursor: nextCursor,
+          hasMore: hasMoreFlag,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error($lf(188), "Failed to load replies", error);
+        setThreadMessages([]);
+        setThreadCursor(null);
+        setThreadHasMore(false);
+        setThreadError(
+          "We couldn't load the reply thread. Please try again."
+        );
+      } finally {
+        if (!cancelled) {
+          setThreadLoading(false);
+        }
+      }
+    };
+
+    loadReplies();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeThreadParentId, selectedCourseId]);
+
+  useEffect(() => {
     const loadCourses = async () => {
       setCoursesLoading(true);
       try {
@@ -280,6 +406,141 @@ export function ChatPage() {
       };
     });
   }, []);
+
+  const selectThread = useCallback(
+    (parentId: string, courseId?: string) => {
+      const resolvedCourseId = courseId ?? selectedCourseId;
+      if (!resolvedCourseId) {
+        return;
+      }
+
+      const cacheKey = makeThreadCacheKey(resolvedCourseId, parentId);
+      const cached = threadCacheRef.current.get(cacheKey);
+
+      if (cached) {
+        setThreadMessages(cached.messages);
+        setThreadCursor(cached.cursor);
+        setThreadHasMore(cached.hasMore);
+      } else {
+        setThreadMessages([]);
+        setThreadCursor(null);
+        setThreadHasMore(false);
+      }
+
+      setThreadError(null);
+      setActiveThreadParentId(parentId);
+    },
+    [selectedCourseId]
+  );
+
+  const maybeInsertThreadMessage = useCallback((message: Message) => {
+    if (!message.parentMessageId) {
+      return;
+    }
+    const cacheKey = makeThreadCacheKey(
+      message.courseId,
+      message.parentMessageId
+    );
+    const existingEntry = threadCacheRef.current.get(cacheKey);
+    const cachedMessages = existingEntry?.messages ?? [];
+    const mergedCache = mergeThreadMessages(cachedMessages, [message]);
+    threadCacheRef.current.set(cacheKey, {
+      messages: mergedCache,
+      cursor: existingEntry?.cursor ?? null,
+      hasMore: existingEntry?.hasMore ?? false,
+    });
+
+    if (activeThreadRef.current !== message.parentMessageId) {
+      return;
+    }
+
+    setThreadMessages((prev) => mergeThreadMessages(prev, [message]));
+  }, []);
+
+  const handleReplyToMessage = useCallback(
+    (message: Message) => {
+      if (!selectedCourseId || message.courseId !== selectedCourseId) {
+        return;
+      }
+      const parentId = message.parentMessageId ?? message.id;
+      selectThread(parentId, message.courseId);
+      const parent =
+        messageLookup.get(parentId) ?? normalizeMessage(message);
+      setReplyTarget(parent);
+    },
+    [messageLookup, selectThread, selectedCourseId]
+  );
+
+  const handleOpenThread = useCallback(
+    (message: Message) => {
+      if (!selectedCourseId || message.courseId !== selectedCourseId) {
+        return;
+      }
+      const parentId = message.parentMessageId ?? message.id;
+      selectThread(parentId, message.courseId);
+    },
+    [selectThread, selectedCourseId]
+  );
+
+  const handleCancelReply = useCallback(() => {
+    setReplyTarget(null);
+  }, []);
+
+  const handleCloseThread = useCallback(() => {
+    setActiveThreadParentId(null);
+    setThreadMessages([]);
+    setThreadCursor(null);
+    setThreadHasMore(false);
+    setThreadError(null);
+    setReplyTarget(null);
+  }, []);
+
+  const handleThreadLoadMore = useCallback(async () => {
+    if (!selectedCourseId || !activeThreadParentId || !threadCursor) {
+      return;
+    }
+
+    setThreadLoading(true);
+    setThreadError(null);
+    try {
+      const { data } = await messageApi.getReplies(
+        selectedCourseId,
+        activeThreadParentId,
+        threadCursor
+      );
+  const normalized = extractMessagesFromResponse(data);
+      const cacheKey = makeThreadCacheKey(
+        selectedCourseId,
+        activeThreadParentId
+      );
+      let mergedMessages: Message[] = [];
+      setThreadMessages((prev) => {
+        const merged = mergeThreadMessages(prev, normalized);
+        mergedMessages = merged;
+        return merged;
+      });
+      const nextCursor =
+        typeof data?.nextCursor === "string" && data.nextCursor.length
+          ? data.nextCursor
+          : null;
+      setThreadCursor(nextCursor);
+      const hasMoreFlag =
+        typeof data?.hasMore === "boolean"
+          ? Boolean(data.hasMore)
+          : Boolean(nextCursor);
+      setThreadHasMore(hasMoreFlag);
+      threadCacheRef.current.set(cacheKey, {
+        messages: mergedMessages,
+        cursor: nextCursor,
+        hasMore: hasMoreFlag,
+      });
+    } catch (error) {
+      console.error($lf(215), "Failed to load more replies", error);
+      setThreadError("We couldn't load more replies. Please try again.");
+    } finally {
+      setThreadLoading(false);
+    }
+  }, [activeThreadParentId, selectedCourseId, threadCursor]);
 
   const applyPinnedState = useCallback(
     (
@@ -383,28 +644,32 @@ export function ChatPage() {
 
   const handleSocketMessage = useCallback(
     (incoming: Message) => {
-      appendMessage(incoming.courseId, incoming);
+      const normalizedIncoming = normalizeMessage(incoming);
+      appendMessage(normalizedIncoming.courseId, normalizedIncoming);
+      maybeInsertThreadMessage(normalizedIncoming);
+
       const senderId =
-        typeof incoming.senderId === "string"
-          ? incoming.senderId
-          : incoming.sender && typeof incoming.sender.id === "string"
-          ? incoming.sender.id
+        typeof normalizedIncoming.senderId === "string"
+          ? normalizedIncoming.senderId
+          : normalizedIncoming.sender &&
+            typeof normalizedIncoming.sender.id === "string"
+          ? normalizedIncoming.sender.id
           : null;
       const currentUserId = user?.id ?? null;
 
-      if (incoming.courseId === selectedCourseId) {
-        markCourseAsRead(incoming.courseId);
+      if (normalizedIncoming.courseId === selectedCourseId) {
+        markCourseAsRead(normalizedIncoming.courseId);
       }
 
       setCourses((prev) =>
         prev.map((course) => {
-          if (course.id !== incoming.courseId) {
+          if (course.id !== normalizedIncoming.courseId) {
             return course;
           }
           if (senderId && currentUserId && senderId === currentUserId) {
             return course;
           }
-          if (incoming.courseId === selectedCourseId) {
+          if (normalizedIncoming.courseId === selectedCourseId) {
             return { ...course, unreadCount: 0 };
           }
           return {
@@ -414,7 +679,13 @@ export function ChatPage() {
         })
       );
     },
-    [appendMessage, markCourseAsRead, selectedCourseId, user?.id]
+    [
+      appendMessage,
+      markCourseAsRead,
+      maybeInsertThreadMessage,
+      selectedCourseId,
+      user?.id,
+    ]
   );
 
   const handleSocketPinned = useCallback(
@@ -459,16 +730,24 @@ export function ChatPage() {
   }, []);
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (
+      content: string,
+      options?: { parentMessageId?: string | null }
+    ) => {
       if (!selectedCourseId || !user) return;
+
+      const parentMessageId = options?.parentMessageId ?? replyTarget?.id ?? null;
       setSending(true);
       try {
-        const { data } = await messageApi.sendMessage(
-          selectedCourseId,
-          content
-        );
-        appendMessage(selectedCourseId, data);
+        const { data } = await messageApi.sendMessage(selectedCourseId, {
+          content,
+          parentMessageId,
+        });
+        const normalized = normalizeMessage(data);
+        appendMessage(selectedCourseId, normalized);
+        maybeInsertThreadMessage(normalized);
         markCourseAsRead(selectedCourseId);
+        setReplyTarget(null);
       } catch (error) {
         console.error($lf(203), "Failed to send message", error);
         const optimistic: Message = {
@@ -478,6 +757,7 @@ export function ChatPage() {
           content,
           type: "TEXT",
           createdAt: new Date().toISOString(),
+          parentMessageId,
           sender: {
             id: user.id,
             name: user.name,
@@ -485,21 +765,40 @@ export function ChatPage() {
           },
         };
         appendMessage(selectedCourseId, optimistic);
+        maybeInsertThreadMessage(optimistic);
+        setReplyTarget(null);
       } finally {
         setSending(false);
       }
     },
-    [appendMessage, markCourseAsRead, selectedCourseId, user]
+    [
+      appendMessage,
+      markCourseAsRead,
+      maybeInsertThreadMessage,
+      replyTarget?.id,
+      selectedCourseId,
+      user,
+    ]
   );
 
   const handleUploadFile = useCallback(
-    async (file: File) => {
+    async (
+      file: File,
+      options?: { parentMessageId?: string | null }
+    ) => {
       if (!selectedCourseId || !user) return;
+
+      const parentMessageId = options?.parentMessageId ?? replyTarget?.id ?? null;
       setSending(true);
       try {
-        const { data } = await messageApi.uploadFile(selectedCourseId, file);
-        appendMessage(selectedCourseId, data);
+        const { data } = await messageApi.uploadFile(selectedCourseId, file, {
+          parentMessageId: parentMessageId ?? undefined,
+        });
+        const normalized = normalizeMessage(data);
+        appendMessage(selectedCourseId, normalized);
+        maybeInsertThreadMessage(normalized);
         markCourseAsRead(selectedCourseId);
+        setReplyTarget(null);
       } catch (error) {
         console.error($lf(237), "Failed to upload file", error);
         const previewUrl = URL.createObjectURL(file);
@@ -511,6 +810,7 @@ export function ChatPage() {
           content: null,
           type: "FILE",
           createdAt: new Date().toISOString(),
+          parentMessageId,
           attachment: {
             fileName: file.name,
             mimeType: file.type,
@@ -524,11 +824,20 @@ export function ChatPage() {
           },
         };
         appendMessage(selectedCourseId, optimistic);
+        maybeInsertThreadMessage(optimistic);
+        setReplyTarget(null);
       } finally {
         setSending(false);
       }
     },
-    [appendMessage, markCourseAsRead, selectedCourseId, user]
+    [
+      appendMessage,
+      markCourseAsRead,
+      maybeInsertThreadMessage,
+      replyTarget?.id,
+      selectedCourseId,
+      user,
+    ]
   );
 
   const handlePinMessage = useCallback(
@@ -677,6 +986,18 @@ export function ChatPage() {
             searchHasMore={searchHasMore}
             onSearchLoadMore={handleSearchLoadMore}
             searchHighlightTerm={trimmedSearchQuery}
+            onReplyToMessage={handleReplyToMessage}
+            onOpenThread={handleOpenThread}
+            replyTarget={replyTarget}
+            onCancelReply={handleCancelReply}
+            threadParent={threadParentMessage}
+            threadMessages={threadMessages}
+            threadLoading={threadLoading}
+            threadHasMore={threadHasMore}
+            onThreadLoadMore={handleThreadLoadMore}
+            onCloseThread={handleCloseThread}
+            messageLookup={getParentMessage}
+            threadError={threadError}
           />
         )
       ) : coursesLoading ? (
@@ -718,12 +1039,80 @@ function normalizeMessageState(value: unknown): Message[] {
   ) {
     return (value as { messages: Message[] }).messages;
   }
+  if (
+    value &&
+    typeof value === "object" &&
+    Array.isArray((value as { replies?: Message[] }).replies)
+  ) {
+    return (value as { replies: Message[] }).replies;
+  }
   return [];
 }
 
 function normalizeMessageList(value: unknown): Message[] {
   const list = normalizeMessageState(value);
   return list.map((item) => normalizeMessage(item));
+}
+
+function extractMessagesFromResponse(payload: unknown): Message[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const candidate = payload as {
+    messages?: unknown;
+    replies?: unknown;
+    data?: unknown;
+  };
+
+  if (Array.isArray(candidate.messages)) {
+    return normalizeMessageList(candidate.messages);
+  }
+
+  if (Array.isArray(candidate.replies)) {
+    return normalizeMessageList(candidate.replies);
+  }
+
+  if (candidate.data && typeof candidate.data === "object") {
+    const nested = candidate.data as {
+      messages?: unknown;
+      replies?: unknown;
+    };
+
+    if (Array.isArray(nested.messages)) {
+      return normalizeMessageList(nested.messages);
+    }
+
+    if (Array.isArray(nested.replies)) {
+      return normalizeMessageList(nested.replies);
+    }
+  }
+
+  return [];
+}
+
+function mergeThreadMessages(
+  existing: Message[],
+  incoming: Message[]
+): Message[] {
+  const map = new Map<string, Message>();
+  existing.forEach((item) => {
+    const normalized = normalizeMessage(item);
+    map.set(normalized.id, normalized);
+  });
+  incoming.forEach((item) => {
+    const normalized = normalizeMessage(item);
+    map.set(normalized.id, normalized);
+  });
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    const aTime = new Date(a.createdAt ?? "").getTime();
+    const bTime = new Date(b.createdAt ?? "").getTime();
+    return aTime - bTime;
+  });
+
+  return merged;
 }
 
 function normalizeMessage(value: Message): Message {

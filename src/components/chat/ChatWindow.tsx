@@ -2,12 +2,13 @@ import { Loader2, Search, X } from "lucide-react";
 import { Message } from "../../types/api";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
+import { ThreadPanel } from "./ThreadPanel";
 
 interface ChatWindowProps {
   messages: Message[];
   currentUserId?: string;
-  onSendMessage: (content: string) => void;
-  onUploadFile: (file: File) => void;
+  onSendMessage: (content: string, options?: { parentMessageId?: string | null }) => void;
+  onUploadFile: (file: File, options?: { parentMessageId?: string | null }) => void;
   disabled?: boolean;
   canPin?: boolean;
   pinnedMessageId?: string | null;
@@ -24,6 +25,18 @@ interface ChatWindowProps {
   searchHasMore?: boolean;
   onSearchLoadMore?: () => void;
   searchHighlightTerm?: string;
+  onReplyToMessage?: (message: Message) => void;
+  onOpenThread?: (message: Message) => void;
+  replyTarget?: Message | null;
+  onCancelReply?: () => void;
+  threadParent?: Message | null;
+  threadMessages?: Message[];
+  threadLoading?: boolean;
+  threadHasMore?: boolean;
+  onThreadLoadMore?: () => void;
+  onCloseThread?: () => void;
+  messageLookup?: (messageId: string) => Message | undefined | null;
+  threadError?: string | null;
 }
 
 export function ChatWindow({
@@ -47,6 +60,18 @@ export function ChatWindow({
   searchHasMore = false,
   onSearchLoadMore,
   searchHighlightTerm,
+  onReplyToMessage,
+  onOpenThread,
+  replyTarget,
+  onCancelReply,
+  threadParent,
+  threadMessages = [],
+  threadLoading,
+  threadHasMore,
+  onThreadLoadMore,
+  onCloseThread,
+  messageLookup,
+  threadError,
 }: ChatWindowProps) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-50">
@@ -136,21 +161,50 @@ export function ChatWindow({
             )}
           </div>
         ) : (
-          <MessageList
-            messages={messages}
-            currentUserId={currentUserId}
-            canPin={canPin}
-            pinnedMessageId={pinnedMessageId}
-            onPinMessage={onPinMessage}
-            onUnpinMessage={onUnpinMessage}
-            pinningMessageId={pinningMessageId}
-          />
+          <div className="flex h-full min-h-0 flex-col lg:flex-row">
+            <div className="flex-1 min-h-0">
+              <MessageList
+                messages={messages}
+                currentUserId={currentUserId}
+                canPin={canPin}
+                pinnedMessageId={pinnedMessageId}
+                onPinMessage={onPinMessage}
+                onUnpinMessage={onUnpinMessage}
+                pinningMessageId={pinningMessageId}
+                onReply={onReplyToMessage}
+                onOpenThread={onOpenThread}
+                getParentMessage={messageLookup}
+              />
+            </div>
+            {threadParent && (
+              <div className="mt-6 w-full shrink-0 lg:mt-0 lg:w-[360px] xl:w-[400px]">
+                <ThreadPanel
+                  parentMessage={threadParent}
+                  replies={threadMessages}
+                  currentUserId={currentUserId}
+                  canPin={canPin}
+                  onClose={onCloseThread}
+                  onReply={onReplyToMessage}
+                  onLoadMore={onThreadLoadMore}
+                  loading={threadLoading}
+                  hasMore={threadHasMore}
+                />
+                {threadError && (
+                  <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                    {threadError}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
       <MessageInput
         onSendMessage={onSendMessage}
         onUploadFile={onUploadFile}
         disabled={disabled}
+        replyTo={replyTarget}
+        onCancelReply={onCancelReply}
       />
     </div>
   );

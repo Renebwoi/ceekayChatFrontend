@@ -2,6 +2,10 @@ import { useCallback, useState, type MouseEvent } from "react";
 import { Loader2, Paperclip, Pin } from "lucide-react";
 import { messageApi } from "../../api/messageApi";
 import { Message } from "../../types/api";
+import {
+  getLatestReplyLabel,
+  getMessagePreview,
+} from "./messageUtils";
 
 interface FileMessageItemProps {
   message: Message;
@@ -12,6 +16,12 @@ interface FileMessageItemProps {
   isPinned?: boolean;
   pinning?: boolean;
   showPinnedLabel?: boolean;
+  parentMessage?: Message | null;
+  onReply?: (message: Message) => void;
+  onOpenThread?: (message: Message) => void;
+  replyCount?: number;
+  latestReply?: Message["latestReply"];
+  isThreadMessage?: boolean;
 }
 
 export function FileMessageItem({
@@ -23,11 +33,22 @@ export function FileMessageItem({
   isPinned,
   pinning,
   showPinnedLabel,
+  parentMessage,
+  onReply,
+  onOpenThread,
+  replyCount = 0,
+  latestReply,
+  isThreadMessage,
 }: FileMessageItemProps) {
   if (!message.attachment) return null;
 
   const { attachment } = message;
   const [isDownloading, setIsDownloading] = useState(false);
+
+  const parentPreview = parentMessage ? getMessagePreview(parentMessage) : "";
+  const parentAuthor = parentMessage?.sender?.name ?? "";
+  const hasReplies = replyCount > 0;
+  const latestReplyLabel = getLatestReplyLabel(latestReply);
 
   const handleTogglePin = () => {
     if (pinning) return;
@@ -39,6 +60,14 @@ export function FileMessageItem({
   };
 
   const pinButtonVisible = Boolean(canPin && (onPin || onUnpin));
+
+  const handleReplyClick = () => {
+    onReply?.(message);
+  };
+
+  const handleOpenThread = () => {
+    onOpenThread?.(message);
+  };
 
   const handleDownload = useCallback(
     async (event: MouseEvent<HTMLAnchorElement>) => {
@@ -102,6 +131,28 @@ export function FileMessageItem({
             <Paperclip className="h-4 w-4" />
             File Attachment
           </div>
+          {parentMessage && (
+            <div
+              className={`mt-2 rounded-xl border px-3 py-2 text-xs leading-snug ${
+                isOwn
+                  ? "border-slate-700 bg-slate-800/60 text-slate-200"
+                  : "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              <p className="font-semibold uppercase tracking-wide">
+                Replying to {parentAuthor || "message"}
+              </p>
+              {parentPreview && (
+                <p
+                  className={`mt-1 text-xs ${
+                    isOwn ? "text-slate-200" : "text-slate-500"
+                  }`}
+                >
+                  {parentPreview}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         {pinButtonVisible && (
           <button
@@ -141,10 +192,44 @@ export function FileMessageItem({
           {isDownloading && <Loader2 className="h-4 w-4 animate-spin" />}
         </p>
         <p className="text-xs opacity-70">
-          {(attachment.size / 1024 / 1024).toFixed(2)} MB •{" "}
-          {message.sender?.name}
+          {(attachment.size / 1024 / 1024).toFixed(2)} MB • {message.sender?.name}
         </p>
       </a>
+      {(onReply || (hasReplies && onOpenThread && !isThreadMessage)) && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          {onReply && (
+            <button
+              type="button"
+              onClick={handleReplyClick}
+              className={`font-semibold transition ${
+                isOwn
+                  ? "text-slate-200 hover:text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Reply
+            </button>
+          )}
+          {hasReplies && onOpenThread && !isThreadMessage && (
+            <button
+              type="button"
+              onClick={handleOpenThread}
+              className={`rounded-full border px-3 py-1 transition ${
+                isOwn
+                  ? "border-slate-700 text-slate-200 hover:border-slate-500 hover:text-white"
+                  : "border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900"
+              }`}
+            >
+              {replyCount === 1 ? "1 reply" : `${replyCount} replies`}
+              {latestReplyLabel && (
+                <span className="ml-2 text-[11px] font-normal text-slate-400">
+                  {latestReplyLabel}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -158,9 +243,8 @@ function deriveFileName(headers: unknown): string | null {
   const recordHeaders = headers as Record<string, unknown>;
 
   const resolveHeader = (name: string): string | null => {
-    const getterValue = typeof withGetter.get === "function"
-      ? withGetter.get(name)
-      : null;
+    const getterValue =
+      typeof withGetter.get === "function" ? withGetter.get(name) : null;
     if (getterValue) {
       return getterValue;
     }

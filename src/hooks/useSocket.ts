@@ -7,6 +7,7 @@ interface UseSocketOptions {
   onMessage: (message: Message) => void;
   onMessagePinned?: (payload: unknown) => void;
   onMessageUnpinned?: (payload: unknown) => void;
+  onMessageReplyMeta?: (payload: unknown) => void;
 }
 
 export function useSocket({
@@ -14,6 +15,7 @@ export function useSocket({
   onMessage,
   onMessagePinned,
   onMessageUnpinned,
+  onMessageReplyMeta,
 }: UseSocketOptions) {
   const socketRef = useRef<Socket | null>(null);
 
@@ -38,6 +40,9 @@ export function useSocket({
     if (onMessageUnpinned) {
       socket.on("course_message:unpinned", onMessageUnpinned);
     }
+    if (onMessageReplyMeta) {
+      socket.on("course_message:reply_count", onMessageReplyMeta);
+    }
     socketRef.current = socket;
 
     return () => {
@@ -48,9 +53,18 @@ export function useSocket({
       if (onMessageUnpinned) {
         socket.off("course_message:unpinned", onMessageUnpinned);
       }
+      if (onMessageReplyMeta) {
+        socket.off("course_message:reply_count", onMessageReplyMeta);
+      }
       socket.disconnect();
     };
-  }, [token, onMessage, onMessagePinned, onMessageUnpinned]);
+  }, [
+    token,
+    onMessage,
+    onMessagePinned,
+    onMessageUnpinned,
+    onMessageReplyMeta,
+  ]);
 
   return socketRef.current;
 }

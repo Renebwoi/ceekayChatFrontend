@@ -8,20 +8,33 @@ export interface MessagesResponse {
   total?: number;
 }
 
+export interface CreateMessagePayload {
+  content: string;
+  parentMessageId?: string | null;
+}
+
+export interface UploadFileOptions {
+  parentMessageId?: string | null;
+}
+
 export const messageApi = {
   getMessages(courseId: string) {
     return axiosClient.get<MessagesResponse>(
       `/api/courses/${courseId}/messages`
     );
   },
-  sendMessage(courseId: string, content: string) {
+  sendMessage(courseId: string, payload: CreateMessagePayload) {
     return axiosClient.post<Message>(`/api/courses/${courseId}/messages`, {
-      content,
+      content: payload.content,
+      parentMessageId: payload.parentMessageId ?? null,
     });
   },
-  uploadFile(courseId: string, file: File) {
+  uploadFile(courseId: string, file: File, options?: UploadFileOptions) {
     const formData = new FormData();
     formData.append("file", file);
+    if (options?.parentMessageId) {
+      formData.append("parentMessageId", options.parentMessageId);
+    }
     return axiosClient.post<Message>(
       `/api/courses/${courseId}/uploads`,
       formData,
@@ -50,6 +63,17 @@ export const messageApi = {
 
     return axiosClient.get<MessagesResponse>(
       `/api/courses/${courseId}/messages/search`,
+      { params }
+    );
+  },
+  getReplies(courseId: string, messageId: string, cursor?: string | null) {
+    const params: Record<string, string> = {};
+    if (cursor) {
+      params.cursor = cursor;
+    }
+
+    return axiosClient.get<MessagesResponse>(
+      `/api/courses/${courseId}/messages/${messageId}/replies`,
       { params }
     );
   },

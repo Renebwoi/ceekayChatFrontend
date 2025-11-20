@@ -17,6 +17,11 @@ interface MessageListProps {
     title: string;
     description?: string;
   };
+  onReply?: (message: Message) => void;
+  onOpenThread?: (message: Message) => void;
+  getParentMessage?: (messageId: string) => Message | undefined | null;
+  showParentContext?: boolean;
+  isThreadView?: boolean;
 }
 
 export function MessageList({
@@ -29,6 +34,11 @@ export function MessageList({
   pinningMessageId,
   highlightTerm,
   showPinnedSection = true,
+  onReply,
+  onOpenThread,
+  getParentMessage,
+  showParentContext = true,
+  isThreadView = false,
   emptyState,
 }: MessageListProps) {
   if (!messages.length) {
@@ -58,6 +68,12 @@ export function MessageList({
     const isOwn = message.senderId === currentUserId;
     const isPinned = Boolean(isPinnedSection || message.isPinned);
     const pinning = pinningMessageId === message.id;
+    const parentMessage =
+      showParentContext && message.parentMessageId
+        ? getParentMessage?.(message.parentMessageId)
+        : undefined;
+    const replyCount = message.replyCount ?? 0;
+    const latestReply = message.latestReply ?? null;
 
     const handlePin = canPin
       ? (target: Message) => onPinMessage?.(target.id)
@@ -77,6 +93,12 @@ export function MessageList({
         isPinned={isPinned}
         pinning={pinning}
         showPinnedLabel={isPinnedSection}
+        parentMessage={parentMessage ?? null}
+        onReply={onReply}
+        onOpenThread={onOpenThread}
+        replyCount={replyCount}
+        latestReply={latestReply}
+        isThreadMessage={isThreadView}
       />
     ) : (
       <TextMessageItem
@@ -89,6 +111,12 @@ export function MessageList({
         pinning={pinning}
         showPinnedLabel={isPinnedSection}
         highlightTerm={highlightTerm}
+        parentMessage={parentMessage ?? null}
+        onReply={onReply}
+        onOpenThread={onOpenThread}
+        replyCount={replyCount}
+        latestReply={latestReply}
+        isThreadMessage={isThreadView}
       />
     );
   };

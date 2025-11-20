@@ -1,6 +1,10 @@
 import { Loader2, Pin } from "lucide-react";
 import type { ReactNode } from "react";
 import { Message } from "../../types/api";
+import {
+  getLatestReplyLabel,
+  getMessagePreview,
+} from "./messageUtils";
 
 interface TextMessageItemProps {
   message: Message;
@@ -12,6 +16,12 @@ interface TextMessageItemProps {
   pinning?: boolean;
   showPinnedLabel?: boolean;
   highlightTerm?: string;
+  parentMessage?: Message | null;
+  onReply?: (message: Message) => void;
+  onOpenThread?: (message: Message) => void;
+  replyCount?: number;
+  latestReply?: Message["latestReply"];
+  isThreadMessage?: boolean;
 }
 
 export function TextMessageItem({
@@ -24,6 +34,12 @@ export function TextMessageItem({
   pinning,
   showPinnedLabel,
   highlightTerm,
+  parentMessage,
+  onReply,
+  onOpenThread,
+  replyCount = 0,
+  latestReply,
+  isThreadMessage,
 }: TextMessageItemProps) {
   const handleTogglePin = () => {
     if (pinning) return;
@@ -35,6 +51,18 @@ export function TextMessageItem({
   };
 
   const pinButtonVisible = Boolean(canPin && (onPin || onUnpin));
+  const parentPreview = parentMessage ? getMessagePreview(parentMessage) : "";
+  const parentAuthor = parentMessage?.sender?.name ?? "";
+  const hasReplies = replyCount > 0;
+  const latestReplyLabel = getLatestReplyLabel(latestReply);
+
+  const handleReplyClick = () => {
+    onReply?.(message);
+  };
+
+  const handleOpenThread = () => {
+    onOpenThread?.(message);
+  };
 
   const renderContent = (): ReactNode => {
     const baseContent =
@@ -125,9 +153,66 @@ export function TextMessageItem({
           </button>
         )}
       </div>
+      {parentMessage && (
+        <div
+          className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-snug ${
+            isOwn
+              ? "border-slate-700 bg-slate-800/60 text-slate-200"
+              : "border-slate-200 bg-slate-50 text-slate-600"
+          }`}
+        >
+          <p className="font-semibold uppercase tracking-wide">
+            Replying to {parentAuthor || "message"}
+          </p>
+          {parentPreview && (
+            <p
+              className={`mt-1 text-xs ${
+                isOwn ? "text-slate-200" : "text-slate-500"
+              }`}
+            >
+              {parentPreview}
+            </p>
+          )}
+        </div>
+      )}
       <p className="mt-2 whitespace-pre-line leading-relaxed">
         {renderContent()}
       </p>
+      {(onReply || (hasReplies && onOpenThread && !isThreadMessage)) && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          {onReply && (
+            <button
+              type="button"
+              onClick={handleReplyClick}
+              className={`font-semibold transition ${
+                isOwn
+                  ? "text-slate-200 hover:text-white"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Reply
+            </button>
+          )}
+          {hasReplies && onOpenThread && !isThreadMessage && (
+            <button
+              type="button"
+              onClick={handleOpenThread}
+              className={`rounded-full border px-3 py-1 transition ${
+                isOwn
+                  ? "border-slate-700 text-slate-200 hover:border-slate-500 hover:text-white"
+                  : "border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900"
+              }`}
+            >
+              {replyCount === 1 ? "1 reply" : `${replyCount} replies`}
+              {latestReplyLabel && (
+                <span className="ml-2 text-[11px] font-normal text-slate-400">
+                  {latestReplyLabel}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      )}
       <p
         className={`mt-3 text-xs ${
           isOwn ? "text-slate-300" : "text-slate-400"
