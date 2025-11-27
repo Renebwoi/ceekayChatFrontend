@@ -1,4 +1,4 @@
-import { Message, MessageReplySummary } from "../../types/api";
+import { Message, ReplyMeta } from "../../types/api";
 
 const MAX_PREVIEW_LENGTH = 80;
 
@@ -30,22 +30,40 @@ export function getMessagePreview(message?: Message | null): string {
   return "Message";
 }
 
-export function getLatestReplyLabel(
-  summary?: MessageReplySummary | null
-): string {
-  if (!summary) {
+export function buildReplyMetaFromMessage(
+  message?: Message | null
+): ReplyMeta | null {
+  if (!message) {
+    return null;
+  }
+
+  const senderName =
+    typeof message.sender?.name === "string" && message.sender.name.trim()
+      ? message.sender.name.trim()
+      : "Unknown";
+
+  const snippet = getMessagePreview(message);
+
+  return {
+    id: message.id,
+    senderName,
+    contentSnippet: snippet ? snippet : null,
+    type: message.type,
+  };
+}
+
+export function getReplyMetaPreview(meta?: ReplyMeta | null): string {
+  if (!meta) {
     return "";
   }
-  const preview = truncate(summary.preview ?? summary.contentPreview ?? "");
-  const author = summary.sender?.name?.trim();
-  if (preview && author) {
-    return `${author}: ${preview}`;
+
+  if (typeof meta.contentSnippet === "string" && meta.contentSnippet.trim()) {
+    return meta.contentSnippet.trim();
   }
-  if (preview) {
-    return preview;
+
+  if (meta.type === "FILE") {
+    return "Attachment";
   }
-  if (author) {
-    return `${author} replied`;
-  }
-  return "New reply";
+
+  return "";
 }
